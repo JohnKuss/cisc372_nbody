@@ -93,6 +93,11 @@ void printSystem(FILE* handle){
 
 int main(int argc, char **argv)
 {
+	//Cuda alloc the device variables
+	cudaMalloc(&d_hVel, sizeof(vector3)*numObjects);
+	cudaMalloc(&d_hPos, sizeof(vector3)*numObjects);
+	cudaMemcpy(&d_hVel, &hVel, numObjects, cudaMemCpyHostToDevice);
+	cudaMemcpy(&d_hPos, &hPos, numObjects, cudaMemCpyHostToDevice);	
 	clock_t t0=clock();
 	int t_now;
 	//srand(time(NULL));

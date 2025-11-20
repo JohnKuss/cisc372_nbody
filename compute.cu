@@ -3,6 +3,7 @@
 #include "vector.h"
 #include "config.h"
 
+
 //Group: John Kuss, Robert Kuss
 
 //compute: Updates the positions and locations of the objects in the system based on gravity.
@@ -12,10 +13,12 @@
 void compute(){
 	//make an acceleration matrix which is NUMENTITIES squared in size;
 	int i,j,k;
-	vector3* values=(vector3*)malloc(sizeof(vector3)*NUMENTITIES*NUMENTITIES);
-	vector3** accels=(vector3**)malloc(sizeof(vector3*)*NUMENTITIES);
+	vector3* d_values;
+	vector3** d_accels;
 	for (i=0;i<NUMENTITIES;i++)
 		accels[i]=&values[i*NUMENTITIES];
+	cudaMalloc(&values, sizeof(vector3)*NUMENTITIES*NUMENTITIES);
+        cudaMalloc(&accels, sizeof(vector3)*NUMENTITIES);
 	//first compute the pairwise accelerations.  Effect is on the first argument.
 	for (i=0;i<NUMENTITIES;i++){
 		for (j=0;j<NUMENTITIES;j++){
@@ -49,3 +52,5 @@ void compute(){
 	free(accels);
 	free(values);
 }
+
+
