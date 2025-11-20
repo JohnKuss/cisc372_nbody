@@ -16,14 +16,14 @@ void compute(){
 	vector3* d_values;
 	vector3** d_accels;
 	for (i=0;i<NUMENTITIES;i++)
-		accels[i]=&values[i*NUMENTITIES];
-	cudaMalloc(&values, sizeof(vector3)*NUMENTITIES*NUMENTITIES);
-        cudaMalloc(&accels, sizeof(vector3)*NUMENTITIES);
+		d_accels[i]=&d_values[i*NUMENTITIES];
+	cudaMalloc(&d_values, sizeof(vector3)*NUMENTITIES*NUMENTITIES);
+        cudaMalloc(&d_accels, sizeof(vector3)*NUMENTITIES);
 	//first compute the pairwise accelerations.  Effect is on the first argument.
 	for (i=0;i<NUMENTITIES;i++){
 		for (j=0;j<NUMENTITIES;j++){
 			if (i==j) {
-				FILL_VECTOR(accels[i][j],0,0,0);
+				FILL_VECTOR(d_accels[i][j],0,0,0);
 			}
 			else{
 				vector3 distance;
@@ -31,7 +31,7 @@ void compute(){
 				double magnitude_sq=distance[0]*distance[0]+distance[1]*distance[1]+distance[2]*distance[2];
 				double magnitude=sqrt(magnitude_sq);
 				double accelmag=-1*GRAV_CONSTANT*mass[j]/magnitude_sq;
-				FILL_VECTOR(accels[i][j],accelmag*distance[0]/magnitude,accelmag*distance[1]/magnitude,accelmag*distance[2]/magnitude);
+				FILL_VECTOR(d_accels[i][j],accelmag*distance[0]/magnitude,accelmag*distance[1]/magnitude,accelmag*distance[2]/magnitude);
 			}
 		}
 	}
@@ -40,7 +40,7 @@ void compute(){
 		vector3 accel_sum={0,0,0};
 		for (j=0;j<NUMENTITIES;j++){
 			for (k=0;k<3;k++)
-				accel_sum[k]+=accels[i][j][k];
+				accel_sum[k]+=d_accels[i][j][k];
 		}
 		//compute the new velocity based on the acceleration and time interval
 		//compute the new position based on the velocity and time interval
@@ -49,8 +49,8 @@ void compute(){
 			hPos[i][k]+=hVel[i][k]*INTERVAL;
 		}
 	}
-	free(accels);
-	free(values);
+	free(d_accels);
+	free(d_values);
 }
 
 
