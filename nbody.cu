@@ -13,6 +13,7 @@
 vector3 *hVel, *d_hVel;
 vector3 *hPos, *d_hPos;
 double *mass;
+//double *d_mass;
 
 //initHostMemory: Create storage for numObjects entities in our system
 //Parameters: numObjects: number of objects to allocate
@@ -94,10 +95,10 @@ void printSystem(FILE* handle){
 int main(int argc, char **argv)
 {
 	//Cuda alloc the device variables
-	cudaMalloc(&d_hVel, sizeof(vector3)*NUMENTITIES);
+	/*cudaMalloc(&d_hVel, sizeof(vector3)*NUMENTITIES);
 	cudaMalloc(&d_hPos, sizeof(vector3)*NUMENTITIES);
 	cudaMemcpy(&d_hVel, &hVel, NUMENTITIES, cudaMemcpyHostToDevice);
-	cudaMemcpy(&d_hPos, &hPos, NUMENTITIES, cudaMemcpyHostToDevice);	
+	cudaMemcpy(&d_hPos, &hPos, NUMENTITIES, cudaMemcpyHostToDevice);*/
 	clock_t t0=clock();
 	int t_now;
 	//srand(time(NULL));
@@ -105,6 +106,7 @@ int main(int argc, char **argv)
 	initHostMemory(NUMENTITIES);
 	planetFill();
 	randomFill(NUMPLANETS + 1, NUMASTEROIDS);
+	allocDeviceMemory();
 	//now we have a system.
 	#ifdef DEBUG
 	printSystem(stdout);
@@ -119,4 +121,5 @@ int main(int argc, char **argv)
 	printf("This took a total time of %f seconds\n",(double)t1/CLOCKS_PER_SEC);
 
 	freeHostMemory();
+	freeDeviceMemory();
 }
