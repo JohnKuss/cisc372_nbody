@@ -11,6 +11,8 @@
 vector3* d_values;
 vector3** d_accels;
 double *d_mass;
+vector3 accel_sum[3]={0,0,0};
+vector3 *d_accel_sum[3]={0,0,0};
 
 //allocDeviceMemory
 //Parameters: None
@@ -27,6 +29,8 @@ void allocDeviceMemory(){
 	cudaMemcpy(&d_mass, &mass, NUMENTITIES, cudaMemcpyHostToDevice);
 	cudaMalloc(&d_values, sizeof(vector3)*NUMENTITIES*NUMENTITIES);
 	cudaMalloc(&d_accels, sizeof(vector3)*NUMENTITIES);
+	cudaMalloc(d_accel_sum, sizeof(vector3)*NUMENTITIES);
+	cudaMemcpy(&d_accel_sum, &accel_sum, NUMENTITIES, cudaMemcpyHostToDevice);
 }
 
 //freeDeviceMemory
@@ -42,7 +46,8 @@ void freeDeviceMemory(){
 }
 
 __global__ void computePairwiseAccel(vector3* d_values, vector3** d_accels, vector3* d_hPos, double* d_mass) {
-        int i=blockIdx.x*blockDim.x+threadIdx.x;
+        //printf("computePairwiseAccel call.\n");
+	int i=blockIdx.x*blockDim.x+threadIdx.x;
         int j=blockIdx.y*blockDim.y+threadIdx.y;
         int k;
         if (i==j) {
@@ -58,24 +63,24 @@ __global__ void computePairwiseAccel(vector3* d_values, vector3** d_accels, vect
         }
 }
 
-__global__ void accelSum(vector3 *accel_sum, vector3** d_accels) {
+__global__ void accelSum(vector3 **d_accel_sum, vector3** d_accels) {
+	//printf("accelSum call.\n");
 	int i=blockIdx.x*blockDim.x+threadIdx.x;
 	int j;
 	int k;
 	for (j=0;j<NUMENTITIES;j++){
 		for (k=0;k<3;k++)
-			accel_sum[k]+=d_accels[i][j][k];
+			**d_accel_sum[k]+=d_accels[i][j][k];
 	}
 }
 
-__global__ void updateVelPos(vector3 *accel_sum, vector3* d_hPos, vector3* d_hVel, vector3** d_accel) {
+__global__ void updateVelPos(vector3 **d_accel_sum, vector3* d_hPos, vector3* d_hVel) {
+	//printf("updateVelPos call.\n");
 	int i=blockIdx.x*blockDim.x+threadIdx.x;
-	int j, k;
-	for (j=0;j<NUMENTITIES;j++){
-		for (k=0;k<3;k++){
-			d_hVel[i][k]+=accel_sum[k]*INTERVAL;
-			d_hPos[i][k]+=d_hVel[i][k]*INTERVAL;
-		}
+	int k;
+	for (k=0;k<3;k++){
+		d_hVel[i][k]+=**d_accel_sum[k]*INTERVAL;
+		d_hPos[i][k]+=d_hVel[i][k]*INTERVAL;
 	}
 }
 
@@ -87,10 +92,14 @@ void compute(){
 	//printf("Start compute.\n");
 	//make an acceleration matrix which is NUMENTITIES squared in size;
 	int i;
-	//vector3* values;
-	//vector3** accels;
+	vector3* values=(vector3*)malloc(sizeof(vector3)*NUMENTITIES*NUMENTITIES);
+	vector3** accels=(vector3**)malloc(sizeof(vector3*)*NUMENTITIES);
+	//printf("Test print 1.\n");
 	for (i=0;i<NUMENTITIES;i++)
-		d_accels[i]=&d_values[i*NUMENTITIES];
+		accels[i]=&values[i*NUMENTITIES];
+	//printf("Test print 2.\n");
+	cudaMemcpy(&d_accels,&accels,NUMENTITIES, cudaMemcpyHostToDevice);
+	//printf("Test print 3.\n");
 	//Kernel variables
 	dim3 threadsPerBlock(16,16);
 	int blocksPerDim=(NUMENTITIES/16-1)/16;
@@ -98,7 +107,7 @@ void compute(){
 	//cudaMalloc(&d_values, sizeof(vector3)*NUMENTITIES*NUMENTITIES);
         //cudaMalloc(&d_accels, sizeof(vector3)*NUMENTITIES);
 	//first compute the pairwise accelerations.  Effect is on the first argument.
-	computePairwiseAccel<<<blocksPerDim,16>>>(d_values, d_accels, d_hPos, d_mass);
+	computePairwiseAccel<<<blocksPerDim,threadsPerBlock>>>(d_values, d_accels, d_hPos, d_mass);
 	/*for (i=0;i<NUMENTITIES;i++){
 		for (j=0;j<NUMENTITIES;j++){
 			if (i==j) {
@@ -115,8 +124,9 @@ void compute(){
 		}
 	}*/
 	//sum up the rows of our matrix to get effect on each entity, then update velocity and position.
-	__device__ vector3 accel_sum={0,0,0}; //Declare cudamalloc
-	accelSum<<<numBlocks,threadsPerBlock>>>(&accel_sum, d_accels);
+	//vector3 accel_sum[3]={0,0,0}; //Declare cudamalloc
+	accelSum<<<numBlocks,16>>>(d_accel_sum, d_accels);
+	updateVelPos<<<numBlocks,16>>>(d_accel_sum, d_hPos, d_hVel);
 	/*for (i=0;i<NUMENTITIES;i++){
 		vector3 accel_sum={0,0,0};
 		for (j=0;j<NUMENTITIES;j++){
@@ -130,8 +140,8 @@ void compute(){
 			hPos[i][k]+=hVel[i][k]*INTERVAL;
 		}
 	}*/
-	//cudaFree(accels);
-	//cudaFree(values);
+	free(accels);
+	free(values);
 #ifdef DEBUG
 	cudaMemcpy(&hVel, &d_hVel, NUMENTITIES, cudaMemcpyDeviceToHost);
         cudaMemcpy(&hPos, &d_hPos, NUMENTITIES, cudaMemcpyDeviceToHost);
@@ -153,7 +163,4 @@ void compute(){
 		double accelmag=-1*GRAV_CONSTANT*d_mass[j]/magnitude_sq;
 		FILL_VECTOR(d_accels[i][j],accelmag*distance[0]/magnitude,accelmag*distance[1]/magnitude,accelmag*distance[2]/magnitude);
 	}
-}
-__global__ void accelSum() {
-	
 }*/
