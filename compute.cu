@@ -8,11 +8,20 @@
 //Group: John Kuss, Robert Kuss
 
 //Declare variables for values and accels to be allocated for device.
+
 vector3* d_values;
 vector3** d_accels;
 double *d_mass;
-vector3 accel_sum[3]={0,0,0};
-vector3 *d_accel_sum[3]={0,0,0};
+vector3 accel_sum[3];//={0,0,0};
+vector3 d_accel_sum[3];//={0,0,0};
+
+void cudaCheckError() {
+	cudaError_t e=cudaGetLastError();
+	if (e!=cudaSuccess) {
+		printf("Cuda failure %s:%d: '%s'\n",__FILE__,__LINE__,cudaGetErrorString(e));
+		exit(0);
+	}
+}
 
 //allocDeviceMemory
 //Parameters: None
@@ -21,16 +30,46 @@ vector3 *d_accel_sum[3]={0,0,0};
 void allocDeviceMemory(){
 	//vector3* d_values;
 	//vector3** d_accels;
+	/*
 	cudaMalloc(&d_hVel, sizeof(vector3)*NUMENTITIES);
+	cudaCheckError();
 	cudaMalloc(&d_hPos, sizeof(vector3)*NUMENTITIES);
+	cudaCheckError();
 	cudaMalloc(&d_mass, sizeof(double)*NUMENTITIES);
-	cudaMemcpy(&d_hVel, &hVel, NUMENTITIES, cudaMemcpyHostToDevice);
-	cudaMemcpy(&d_hPos, &hPos, NUMENTITIES, cudaMemcpyHostToDevice);
-	cudaMemcpy(&d_mass, &mass, NUMENTITIES, cudaMemcpyHostToDevice);
+	cudaCheckError();
+	cudaMemcpy(d_hVel, hVel, sizeof(vector3)*NUMENTITIES, cudaMemcpyHostToDevice);
+	cudaCheckError();
+	cudaMemcpy(d_hPos, hPos,sizeof(vector3)*NUMENTITIES, cudaMemcpyHostToDevice);
+	cudaCheckError();
+	cudaMemcpy(d_mass,mass, sizeof(double)*NUMENTITIES, cudaMemcpyHostToDevice);
+	cudaCheckError();
 	cudaMalloc(&d_values, sizeof(vector3)*NUMENTITIES*NUMENTITIES);
-	cudaMalloc(&d_accels, sizeof(vector3)*NUMENTITIES);
-	cudaMalloc(d_accel_sum, sizeof(vector3)*NUMENTITIES);
-	cudaMemcpy(&d_accel_sum, &accel_sum, NUMENTITIES, cudaMemcpyHostToDevice);
+	cudaCheckError();
+	cudaMalloc(&d_accels, sizeof(vector3*)*NUMENTITIES);
+	cudaCheckError();
+	cudaMalloc((void**)&d_accel_sum, sizeof(vector3*)*NUMENTITIES);
+	cudaCheckError();
+	cudaMemcpy(d_accel_sum, accel_sum,sizeof(vector3)* NUMENTITIES, cudaMemcpyHostToDevice);
+	cudaCheckError();
+	*/
+
+	cudaMalloc((void**)&d_accels, (NUMENTITIES)*sizeof(vector3));
+	cudaCheckError();
+	vector3* temp[NUMENTITIES];
+	for (int i = 0; i<NUMENTITIES; i++){
+		cudaMalloc(&temp[i], sizeof(vector3)*NUMENTITIES);
+	}
+	cudaMemcpy(d_accels, temp, sizeof(vector3*)*NUMENTITIES, cudaMemcpyHostToDevice);
+	cudaMalloc((void**)&d_hPos, (NUMENTITIES)*sizeof(vector3));
+	cudaCheckError();
+	cudaMalloc((void**)&d_hVel, NUMENTITIES*sizeof(vector3));
+	cudaCheckError();
+	cudaMalloc((void**)&d_mass, (NUMENTITIES)*sizeof(double));
+	cudaCheckError();
+	cudaMemcpy(d_hPos, hPos, (NUMENTITIES)*sizeof(vector3), cudaMemcpyHostToDevice);
+	cudaCheckError();
+	cudaMemcpy(d_hVel, hVel, (NUMENTITIES)*sizeof(vector3), cudaMemcpyHostToDevice);
+	cudaCheckError();
 }
 
 //freeDeviceMemory
@@ -38,11 +77,11 @@ void allocDeviceMemory(){
 //Returns: None
 //Helper function to cudaFree all device variables.
 void freeDeviceMemory(){
-	cudaFree(&d_hVel);
-	cudaFree(&d_hPos);
-	cudaFree(&d_mass);
-	cudaFree(&d_values);
-	cudaFree(&d_accels);
+	cudaFree(d_hVel);
+	cudaFree(d_hPos);
+	cudaFree(d_mass);
+	cudaFree(d_values);
+	cudaFree(d_accels);
 }
 
 __global__ void computePairwiseAccel(vector3* d_values, vector3** d_accels, vector3* d_hPos, double* d_mass) {
@@ -98,7 +137,7 @@ void compute(){
 	for (i=0;i<NUMENTITIES;i++)
 		accels[i]=&values[i*NUMENTITIES];
 	//printf("Test print 2.\n");
-	cudaMemcpy(&d_accels,&accels,NUMENTITIES, cudaMemcpyHostToDevice);
+	//cudaMemcpy(d_accels,accels,sizeof(vector3)*NUMENTITIES, cudaMemcpyHostToDevice);
 	//printf("Test print 3.\n");
 	//Kernel variables
 	dim3 threadsPerBlock(16,16);
@@ -125,8 +164,8 @@ void compute(){
 	}*/
 	//sum up the rows of our matrix to get effect on each entity, then update velocity and position.
 	//vector3 accel_sum[3]={0,0,0}; //Declare cudamalloc
-	accelSum<<<numBlocks,16>>>(d_accel_sum, d_accels);
-	updateVelPos<<<numBlocks,16>>>(d_accel_sum, d_hPos, d_hVel);
+	accelSum<<<numBlocks,16>>>((vector3**)d_accel_sum, d_accels);
+	updateVelPos<<<numBlocks,16>>>((vector3**)d_accel_sum, d_hPos, d_hVel);
 	/*for (i=0;i<NUMENTITIES;i++){
 		vector3 accel_sum={0,0,0};
 		for (j=0;j<NUMENTITIES;j++){
@@ -143,8 +182,10 @@ void compute(){
 	free(accels);
 	free(values);
 #ifdef DEBUG
-	cudaMemcpy(&hVel, &d_hVel, NUMENTITIES, cudaMemcpyDeviceToHost);
-        cudaMemcpy(&hPos, &d_hPos, NUMENTITIES, cudaMemcpyDeviceToHost);
+	cudaMemcpy(hVel, d_hVel, NUMENTITIES, cudaMemcpyDeviceToHost);
+	cudaCheckError();
+        cudaMemcpy(hPos, d_hPos, NUMENTITIES, cudaMemcpyDeviceToHost);
+	cudaCheckError();
 #endif
 }
 

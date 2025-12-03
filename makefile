@@ -1,9 +1,9 @@
-FLAGS= -DDEBUG
+FLAGS= -DDEBUG -g -lineinfo
 LIBS= -lm
 ALWAYS_REBUILD=makefile
 
 nbody: nbody.o compute.o
-	nvcc $(FLAGS) $^ -o $@ $(LIBS)
+	nvcc $(FLAGS) $^ -o $@ $(LIBS) --gpu-architecture=compute_35
 nbody.o: nbody.cu planets.h config.h vector.h $(ALWAYS_REBUILD)
 	nvcc $(FLAGS) -c $<
 compute.o: compute.cu config.h vector.h $(ALWAYS_REBUILD)
